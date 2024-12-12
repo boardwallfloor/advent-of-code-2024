@@ -1,10 +1,10 @@
 package main
 
 func main() {
-	scans := scanInput("./2day.txt")
+	scans := scanInput("./3day.txt")
 	scan := scans.scan
 	defer scans.file.Close()
 
-	d2 := Day2{}
-	d2.part2(scan)
+	d3 := Day3{}
+	d3.part2(scan)
 }

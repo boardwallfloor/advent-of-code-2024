@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+const (
+	CONSTANT_INCREASE = 1
+	CONSTANT_DECREASE = 0
+)
+
 type Day2 struct{}
 
 func (d *Day2) part1(scans *bufio.Scanner) {
@@ -37,7 +42,7 @@ func (d *Day2) part1(scans *bufio.Scanner) {
 				}
 			}
 
-			if isInc == 0 && hold < v || isInc == 1 && hold > v || absInt(hold-v) > 3 || hold == v {
+			if isInc == CONSTANT_DECREASE && hold < v || isInc == CONSTANT_INCREASE && hold > v || absInt(hold-v) > 3 || hold == v {
 				isSafe = false
 				fmt.Println(levels)
 				break
@@ -56,48 +61,75 @@ func (d *Day2) part1(scans *bufio.Scanner) {
 }
 
 func (d *Day2) dampUnsafe(levels []int, strikes int, isInc int) bool {
-	// Base case: A one- or two-element array is always safe
-	if len(levels) <= 2 {
-		return true
-	}
+	levelsCopy := make([]int, len(levels))
+	copy(levelsCopy, levels)
 
-	// Check if the current levels array is safe
-	hold := levels[0]
-	for i := 1; i < len(levels); i++ {
-		diff := absInt(levels[i] - hold)
-
-		// Determine if the sequence is valid
-		if diff < 1 || diff > 3 || levels[i] == hold ||
-			(isInc == 0 && levels[i] > hold) ||
-			(isInc == 1 && levels[i] < hold) {
-			// Sequence is invalid; decide if a strike is tolerable
-			strikes++
-			if strikes > 1 {
-				return false // More than one strike makes it unsafe
+	hold := levelsCopy[0]
+	mark := 0
+	fault := 0
+	for i, v := range levelsCopy[1:] {
+		if isInc == -1 {
+			if hold < v {
+				isInc = CONSTANT_INCREASE
+			} else {
+				isInc = CONSTANT_DECREASE
 			}
-
-			// Try removing any one level and check for safety
-			for j := 0; j < len(levels); j++ {
-				modifiedLevels := append(levels[:j], levels[j+1:]...)
-				if d.dampUnsafe(modifiedLevels, strikes, -1) {
-					return true
-				}
-			}
-			return false // No valid removal found
 		}
 
-		// Update direction (isInc) if not yet determined
-		if isInc == -1 {
-			if levels[i] > hold {
+		if isInc == CONSTANT_DECREASE && hold < v || isInc == CONSTANT_INCREASE && hold > v || absInt(hold-v) > 3 || hold == v {
+			mark = i + 1
+			strikes += 1
+			fault += 1
+		}
+		hold = v
+	}
+	if strikes > 1 {
+		return false
+	}
+	if strikes > 0 {
+		if fault == 0 {
+			return true
+		}
+
+		firstArr := make([]int, len(levelsCopy))
+		secondArr := make([]int, len(levelsCopy))
+		copy(firstArr, levelsCopy)
+		copy(secondArr, levelsCopy)
+
+		firstArr = append(firstArr[:mark], firstArr[mark+1:]...)
+		secondArr = append(secondArr[:mark-1], secondArr[mark:]...)
+
+		first := d.dampUnsafe(firstArr, strikes, isInc)
+		second := d.dampUnsafe(secondArr, strikes, isInc)
+
+		if !first && !second {
+			return false
+		}
+	}
+	return true
+}
+
+func (d *Day2) ScanUnsafe(levels []int) bool {
+	hold := 0
+	isInc := -1
+	for i, v := range levels {
+		if i == 0 {
+			hold = v
+		}
+		if isInc == -1 && i > 0 {
+			if hold < v {
 				isInc = 1
-			} else if levels[i] < hold {
+			} else {
 				isInc = 0
 			}
 		}
-		hold = levels[i]
-	}
 
-	return true // No faults found, sequence is safe
+		if absInt(hold-v) > 3 || (isInc == CONSTANT_DECREASE && hold < v) || (isInc == CONSTANT_INCREASE && hold > v) || (hold == v && i != 0) {
+			return false
+		}
+		hold = v
+	}
+	return true
 }
 
 func (d *Day2) part2(scans *bufio.Scanner) {
@@ -114,9 +146,20 @@ func (d *Day2) part2(scans *bufio.Scanner) {
 			}
 			levels[i] = val
 		}
-		isSafe := d.dampUnsafe(levels, 0, -1)
-		if isSafe {
-			safe++
+		UndampendStatus := d.ScanUnsafe(levels)
+		DampenedStatus := false
+		if !UndampendStatus {
+			for i := range levels {
+				newArr := append([]int{}, levels[:i]...)
+				newArr = append(newArr, levels[i+1:]...)
+				DampenedStatus = d.ScanUnsafe(newArr)
+				if DampenedStatus {
+					break
+				}
+			}
+		}
+		if UndampendStatus || DampenedStatus {
+			safe += 1
 		}
 
 	}
@@ -125,71 +168,3 @@ func (d *Day2) part2(scans *bufio.Scanner) {
 		log.Fatalln(scans.Err())
 	}
 }
-
-// package main
-//
-// import (
-// 	"fmt"
-// 	"math"
-// )
-//
-// // Helper function to check if a slice is monotonic and has valid level differences
-// func isMonotonicAndSafe(levels []int) bool {
-// 	if len(levels) < 2 {
-// 		return true // A single level is trivially safe
-// 	}
-//
-// 	isIncreasing := true
-// 	isDecreasing := true
-//
-// 	for i := 0; i < len(levels)-1; i++ {
-// 		diff := levels[i+1] - levels[i]
-// 		if diff < 1 || diff > 3 {
-// 			return false // Invalid level difference
-// 		}
-// 		if levels[i+1] < levels[i] {
-// 			isIncreasing = false
-// 		}
-// 		if levels[i+1] > levels[i] {
-// 			isDecreasing = false
-// 		}
-// 	}
-//
-// 	return isIncreasing || isDecreasing
-// }
-//
-// // Function to check if removing one level can make the report safe
-// func isSafeWithOneRemoval(levels []int) bool {
-// 	for i := 0; i < len(levels); i++ {
-// 		// Create a new slice excluding the current level
-// 		modifiedLevels := append(levels[:i], levels[i+1:]...)
-// 		if isMonotonicAndSafe(modifiedLevels) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-//
-// // Main function to analyze reports
-// func analyzeReport(levels []int) string {
-// 	if isMonotonicAndSafe(levels) || isSafeWithOneRemoval(levels) {
-// 		return "Safe"
-// 	}
-// 	return "Unsafe"
-// }
-//
-// func main() {
-// 	// Test cases
-// 	reports := [][]int{
-// 		{7, 6, 4, 2, 1},   // Safe
-// 		{1, 2, 4, 7, 3},   // Unsafe
-// 		{1, 3, 6, 5, 2},   // Unsafe
-// 		{10, 8, 6, 4, 3},  // Safe
-// 		{5, 6, 9, 12},     // Unsafe
-// 		{3, 6, 9, 12, 15}, // Safe
-// 	}
-//
-// 	for _, report := range reports {
-// 		fmt.Printf("Report %v: %s\n", report, analyzeReport(report))
-// 	}
-// }
